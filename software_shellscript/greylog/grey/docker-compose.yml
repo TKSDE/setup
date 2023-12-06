@@ -1,0 +1,66 @@
+version: '2'
+services:
+  mongodb:
+    image: mongo:4.2
+    networks:
+      - graylog
+    volumes:
+      - /mongo_data:/data/db
+    ports:
+      - "6385:27017"  # Use the specified port (6385) for MongoDB
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch-oss:7.10.2
+    volumes:
+      - /es_data:/usr/share/elasticsearch/data
+    environment:
+      - http.host=0.0.0.0
+      - transport.host=localhost
+      - network.host=0.0.0.0
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    mem_limit: 1g
+    networks:
+      - graylog
+
+  graylog:
+    image: graylog/graylog:4.2
+    volumes:
+      - /graylog_journal:/usr/share/graylog/data/journal
+    environment:
+      - GRAYLOG_PASSWORD_SECRET=password@12345678904
+      - GRAYLOG_ROOT_PASSWORD_SHA2=179c0ffc04c8e52669290ce8ffc09f65a028017d871add0c22a3adb551c2d6bd
+      - GRAYLOG_HTTP_EXTERNAL_URI=http://3.1.49.38:9000  # Use your actual server IP
+      - GRAYLOG_MONGODB_URI=mongodb://mongodb:27017/graylog
+    entrypoint: /usr/bin/tini -- wait-for-it elasticsearch:9200 --  /docker-entrypoint.sh
+    networks:
+      - graylog
+    links:
+      - mongodb:mongo
+      - elasticsearch
+    restart: always
+    depends_on:
+      - mongodb
+      - elasticsearch
+    ports:
+      - "9000:9000"
+      - "1514:1514"
+      - "1514:1514/udp"
+      - "12201:12201"
+      - "12201:12201/udp"
+
+volumes:
+  mongo_data:
+    driver: local
+  es_data:
+    driver: local
+  graylog_journal:
+    driver: local
+
+networks:
+  graylog:
+    driver: bridge
+
